@@ -1,0 +1,13 @@
+{
+    "name": "scarletsfiction/scarletsquery",
+    "description": "ScarletsQuery is a high performance HTML or XML query selector/parser for PHP that almost like jQuery.",
+    "require": {
+        "php": ">=5.6"
+    },
+    "license": "MIT",
+    "keywords": ["php", "html", "parser", "dom", "selector", "scarlets"],
+    "autoload": {"files":["ScarletsQuery.php"]},
+    "authors": [
+        {"name": "ScarletsFiction"}
+    ]
+}
