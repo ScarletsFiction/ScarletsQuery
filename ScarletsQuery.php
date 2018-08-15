@@ -15,6 +15,7 @@ namespace Scarlets\Library;
 class MarkupLanguage{
 	private static $DocumentTree = [];
 	private static $currentTreeIndex = [];
+	private static $lockTreeIndex = false;
 
 	public static function selector($selector, $customTree){
 		// Create copy
@@ -22,6 +23,11 @@ class MarkupLanguage{
 
 		$selector = explode(' ', $selector);
 		foreach($selector as $value){
+			if($value[0] === '>'){
+				self::$lockTreeIndex = count(self::$currentTreeIndex) + 1;
+				continue;
+			}
+
 			if($value[0]==='.')
 				self::findClass(substr($value, 1));
 
@@ -40,11 +46,16 @@ class MarkupLanguage{
 
 			else
 				self::findTag($value);
+
+			if(self::$lockTreeIndex)
+				self::$lockTreeIndex = false;
 		}
 		return self::$DocumentTree;
 	}
 
 	private static function currentElementQuery($selector){
+		self::$lockTreeIndex = false;
+
 		preg_match_all('/[.#[][\w=\"\']+/', $selector, $matches);
 		foreach($matches[0] as $value) {
 			if($value[0] === '.')
@@ -54,7 +65,7 @@ class MarkupLanguage{
 				self::findID(substr($value, 1), true);
 
 			elseif($value[0] === '['){
-				$value = substr($value, 1, -1);
+				$value = substr($value, 1);
 				$value = explode('=', $value);
 				if(count($value)===1)
 					$value[1] = null;
@@ -89,6 +100,7 @@ class MarkupLanguage{
 	private static function &iterateFindClass($class, &$currentTree){
 		$found = [];
 		$count = 0;
+		$treeLocked = self::$lockTreeIndex ? (self::$lockTreeIndex < count(self::$currentTreeIndex)) : false;
 		self::$currentTreeIndex[] = &$count;
 		foreach($currentTree as $childs){
 			if(isset($childs['parent']))
@@ -100,7 +112,7 @@ class MarkupLanguage{
 					$found[] = $childs;
 				}
 
-				if(isset($childs['child'])){
+				if(isset($childs['child']) && !$treeLocked){
 					$data = self::iterateFindClass($class, $childs['child']);
 					if(!empty($data)) $found = array_merge($found, $data);
 				}
@@ -136,6 +148,7 @@ class MarkupLanguage{
 	private static function &iterateFindID($id, &$currentTree){
 		$found = [];
 		$count = 0;
+		$treeLocked = self::$lockTreeIndex ? (self::$lockTreeIndex < count(self::$currentTreeIndex)) : false;
 		self::$currentTreeIndex[] = &$count;
 		foreach($currentTree as $childs){
 			if(isset($childs['parent']))
@@ -147,7 +160,7 @@ class MarkupLanguage{
 					$found[] = $childs;
 				}
 
-				if(isset($childs['child'])){
+				if(isset($childs['child']) && !$treeLocked){
 					$data = self::iterateFindID($id, $childs['child']);
 					if(!empty($data)) $found = array_merge($found, $data);
 				}
@@ -163,10 +176,10 @@ class MarkupLanguage{
 		if($currentElement){
 			$collection = &self::$DocumentTree;
 			for ($i=0; $i < count($collection); $i++) {
-				foreach ($collection[$i] as $tag => $value) {
-					if(!isset($value[$select]))
+				foreach ($collection[$i] as $tag => $attr) {
+					if(!isset($attr[$select]))
 						unset($collection[$i]);
-					elseif($value !== null && $value !== $value[$select])
+					elseif($value !== null && $value !== $attr[$select])
 						unset($collection[$i]);
 					break;
 				}
@@ -184,6 +197,7 @@ class MarkupLanguage{
 	private static function &iterateFindAttr($key, $values, &$currentTree){
 		$found = [];
 		$count = 0;
+		$treeLocked = self::$lockTreeIndex ? (self::$lockTreeIndex < count(self::$currentTreeIndex)) : false;
 		self::$currentTreeIndex[] = &$count;
 		foreach($currentTree as $childs){
 			if(isset($childs['parent']))
@@ -203,7 +217,7 @@ class MarkupLanguage{
 					}
 				}
 				
-				if(isset($childs['child'])){
+				if(isset($childs['child']) && !$treeLocked){
 					$data = self::iterateFindAttr($key, $values, $childs['child']);
 					if(!empty($data)) $found = array_merge($found, $data);
 				}
@@ -226,6 +240,7 @@ class MarkupLanguage{
 	private static function &iterateFindTag($findTag, &$currentTree){
 		$found = [];
 		$count = 0;
+		$treeLocked = self::$lockTreeIndex ? (self::$lockTreeIndex < count(self::$currentTreeIndex)) : false;
 		self::$currentTreeIndex[] = &$count;
 		foreach($currentTree as $childs){
 			if(isset($childs['parent']))
@@ -237,7 +252,7 @@ class MarkupLanguage{
 					$found[] = $childs;
 				}
 
-				if(isset($childs['child'])){
+				if(isset($childs['child']) && !$treeLocked){
 					$data = self::iterateFindTag($findTag, $childs['child']);
 					if(!empty($data)) $found = array_merge($found, $data);
 				}
@@ -254,6 +269,11 @@ class MarkupLanguage{
 		// Remove all not important stuff
 		$source = preg_replace('/<(style|script).*?<\/(style|script)>|\n+|\t+|\r/s', '', $source);
 		$source = str_replace(['<br />', '<br/>', '<br>'], "\n", $source);
+		$source = str_replace(['“', '”', "&#8220;", "&#8221;"], '"', $source);
+		$source = str_replace(["&#8217;", "&#8216;"], "'", $source);
+		$source = str_replace("&#8211;", "-", $source);
+		$source = str_replace("&#8230;", "...", $source);
+		$source = htmlspecialchars_decode($source, ENT_QUOTES);
 
 		$matches = explode('<', $source);
 		array_shift($matches);
@@ -509,7 +529,7 @@ class MarkupLanguageElementCollection implements \ArrayAccess{
 
 	public function offsetSet($index, $value){
 		if(!$value instanceof Element)
-			throw new Exception("Value must be the instance of MarkupLanguageElement");
+			throw new \Exception("Value must be the instance of MarkupLanguageElement");
 		
         if(is_null($index))
             $this->collection[] = $value;
