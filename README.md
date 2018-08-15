@@ -15,9 +15,73 @@ Clone/download this repository and include `ScarletsQuery.php`
 ### Install with composer
 > composer require scarletsfiction/scarletsquery
 
-## Basic Usage
+## Available Methods
 This library query selector is designed like jQuery's queryselector.<br>
 But there are different method to obtain the data.
+
+### MarkupLanguage
+This class will handle every selector query and parse Markup Language.
+
+> MarkupLanguage::parseText($string);
+
+Parse HTML/XML to structured array as `MarkupLanguageElementCollection`
+
+### MarkupLanguageElementCollection
+This class have a collection of Element Tree, you can also obtain the value just like an array `$collection[0]` and it will return `MarkupLanguageElement`.
+
+> $dom->length;
+
+Return length of Element Collection
+
+> $dom->view;
+
+Return raw array of the Element Collection
+
+> $dom->selector($query);
+
+Return the result as `MarkupLanguageElementCollection`
+
+> $dom->parent();
+
+Return parent of all result as `MarkupLanguageElementCollection`
+
+> $dom->content($index = false);
+
+Return content of all result as `Array`
+If `$index` specified, it will return the content as `String`
+
+### MarkupLanguageElement
+This class have a collection of Element Tree, you can also obtain the value just like an array `$collection[0]` and it will return `MarkupLanguageElement`.
+
+> $dom->view;
+
+Return raw array of the Element
+
+> $dom->selector($query);
+
+Return the result as `MarkupLanguageElement`
+
+> $dom->parent();
+
+Return the element's parent `MarkupLanguageElement`
+
+> $dom->hasClass($class);
+
+Return `true` if found and vice-versa
+
+> $dom->next($jump = 1);
+
+Return the next sibling element as `MarkupLanguageElement`
+
+> $dom->content();
+
+Return the content as `String`
+
+> $dom->attr($property);
+
+Return element property as `String` or `null` if not found
+
+## Example Usage
 
 ```html
 <ul>
@@ -40,6 +104,8 @@ But there are different method to obtain the data.
 </ul>
 ```
 
+And below is the PHP script
+
 ```php
 $html = file_get_contents('sample.html');
 $dom = Scarlets\Library\MarkupLanguage::parseText($html);
@@ -55,23 +121,26 @@ $dom->selector('#name')->content();
     )
 */
 
-// Select element that have 'ul' tag and select
-// the child with '3' id, select the element before it
-// next(-1) and get the content
-// It will not return array because you select one element
-// after the selector(..)[index]
+/*
+  1. Select element that have 'ul' tag
+  2. Select the child with '3' id
+  3. Select the element before it { next(-1) }
+  4. Get the content
+*/
 $dom->selector('ul #3')[0]->next(-1)->content();
 /* Output
     Elisabeth
 */
 
 // Select 'ul' tag and the child with 'li' tag
-// Iterate over the result, you can also use 'view'
-// $contents->view; to get the raw array
 $contents = $dom->selector('ul li');
+
+// Iterate over the result
 for ($i=0; $i < $contents->length; $i++) {
+
     // Check if the element has 'profile' class
     if($contents[$i]->hasClass('profile')){
+
         // Select the child with 'span' tag
         // And get the second content
         print_r($contents[$i]->selector('span')->content(1));

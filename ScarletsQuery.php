@@ -493,7 +493,7 @@ class MarkupLanguageElementCollection implements \ArrayAccess{
 			if(isset($this->collection[$index]) && isset($this->collection[$index]['content']))
 				return $this->collection[$index]['content'];
 			else{
-				$n = null;
+				$n = '';
 				return $n;
 			}
 		}
