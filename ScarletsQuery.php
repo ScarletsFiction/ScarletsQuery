@@ -314,7 +314,7 @@ class MarkupLanguage{
 				if(count($attributes) === 1)
 					$attributes = [];
 				else{
-					$attributes[1] = str_replace("'", '"', $attributes[1]);
+					$attributes[1] = str_replace(["\'", '\"'], '\\%1', $attributes[1]);
 					$attributes_ = explode('="', $attributes[1]);
 					$attributes = [];
 
@@ -322,14 +322,17 @@ class MarkupLanguage{
 					if(strpos($attr, ' ') !== false){
 						$attr = explode(' ', $attr);
 						foreach ($attr as $value) {
-							$attributes[$value] = '';
+							if(strpos($value, '=') !== false){
+								$value = explode('=', $value, 2);
+								$attributes[$value[0]] = $value[1];
+							}
+							else $attributes[$value] = '';
 						}
 						$attr = $attr[count($attr) - 1];
 					}
 
 					$data = '';
 
-					// Will error if the string has escaped \"
 					for($a=1; $a < count($attributes_); $a++){
 						$attributes_[$a] = explode('"', $attributes_[$a]);
 						$data .=  $attributes_[$a][0];
@@ -512,6 +515,7 @@ class MarkupLanguageElement{
 					$value = $value[0];
 			}
 		}
+
 		if($isRecalled === false && isset($content[0]))
 			$content = $content[0];
 
@@ -625,7 +629,8 @@ class MarkupLanguageElementCollection implements \ArrayAccess{
 
 		if($isRecalled === false){
 			foreach ($content as &$value) {
-				$value = $value[0];
+				if(is_array($value))
+					$value = $value[0];
 			}
 		}
 
