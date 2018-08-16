@@ -268,7 +268,7 @@ class MarkupLanguage{
 		self::$DocumentTree = [];
 		// Remove all not important stuff
 		$source = preg_replace('/<(style|script).*?<\/(style|script)>|\n+|\t+|\r/s', '', $source);
-		$source = str_replace(['<br />', '<br/>', '<br>'], "\n", $source);
+		$source = str_replace(['<br/ >', '<br />', '<br/>', '<br>', '</br>', '</ br>', '< /br>'], "\n", $source);
 		$source = str_replace(['“', '”', "&#8220;", "&#8221;"], '"', $source);
 		$source = str_replace(["&#8217;", "&#8216;"], "'", $source);
 		$source = str_replace("&#8211;", "-", $source);
@@ -282,6 +282,7 @@ class MarkupLanguage{
 	}
 
 	private static function parseTree(&$lastTree, $lastIndex, &$elements, $elementCount){
+		$parentContent = false;
 		for ($i = $lastIndex; $i < $elementCount; $i++) {
 			$element = trim($elements[$i]);
 
@@ -290,8 +291,13 @@ class MarkupLanguage{
 				continue;
 
 			// Check for a closing
-			if($element[0][0] === '/')
+			if($element[0][0] === '/'){
+				/* $content = preg_replace('/^.*?>|<.*?<\/.*?>|<.*$/', '', $element); */
+				$content = trim(explode('>', $element)[1]);
+				if(strlen($content) !== 0)
+					return [$i, $content];
 				return $i;
+			}
 			
 			// For checking later
 			$ends = false;
@@ -361,17 +367,13 @@ class MarkupLanguage{
 						}
 					}
 
-					
-
 					$attributes_ = NULL;
 				}
 			}
 
 
 			// Check if this element not have a child element
-			if($ends
-				|| $tag === 'meta'
-				|| $tag === 'link'){
+			if($ends || $tag === 'meta' || $tag === 'link'){
 
 				// Explode classes
 				if(isset($attributes['class']))
@@ -386,7 +388,12 @@ class MarkupLanguage{
 
 			// Create the tree by re-parse the child element
 			$childTree = [];
-			$i = self::parseTree($childTree, $i + 1, $elements, $elementCount);
+			$z = self::parseTree($childTree, $i + 1, $elements, $elementCount);
+			if(is_array($z)){
+				$i = $z[0];
+				$parentContent = $z[1];
+			}
+			else $i = $z;
 
 			// Explode classes
 			if(isset($attributes['class']))
@@ -399,8 +406,14 @@ class MarkupLanguage{
 			if(!empty($childTree))
 				$currentTree['child'] = $childTree;
 
-			if(strlen($element)!==0)
+			if(strlen($element)!==0){
 				$currentTree['content'] = $element;
+			}
+
+			if($parentContent !== false){
+				$currentTree['s_content'] = $parentContent;
+				$parentContent = false;
+			}
 
 			$lastTree[] = $currentTree;
 		}
@@ -460,6 +473,49 @@ class MarkupLanguageElement{
 		if(isset($this->element['content']))
 			return $this->element['content'];
 		return '';
+	}
+	
+	public function &contents($elements = false){
+		$root = false;
+		if($elements===false)
+			$root = true;
+
+		if(!is_array($elements))
+			$elements = [$this->element];
+
+		$siblingContent = false;
+
+		$content = [];
+		foreach ($elements as $element) {
+			$currentContent = [];
+			if(isset($element['content']))
+		 		$currentContent[] = $element['content'];
+
+			if(isset($element['s_content'])){
+				$siblingContent = true;
+		 		$currentContent[count($currentContent)-1] .= $element['s_content'];
+			}
+
+			if(isset($element['child'])){
+				$temp = $this->contents($element['child']);
+				if(is_string($temp) || !empty($temp))
+					$currentContent[] = $temp;
+			}
+
+			if(!empty($currentContent))
+				$content[] = $currentContent;
+		}
+
+		if($siblingContent === true){
+			foreach ($content as &$value) {
+				if(count($value)===1)
+					$value = $value[0];
+			}
+		}
+		if($root === true && isset($content[0]))
+			$content = $content[0];
+
+		return $content;
 	}
 	
 	public function attr($attr){
@@ -524,6 +580,44 @@ class MarkupLanguageElementCollection implements \ArrayAccess{
 		 		$content[] = $this->collection[$i]['content'];
 		}
 
+		return $content;
+	}
+	
+	public function &contents($elements = false){
+		if($elements===false)
+			$elements = $this->collection;
+		elseif(is_numeric($elements))
+			$elements = $this->collection[$elements];
+
+		$siblingContent = false;
+
+		$content = [];
+		foreach ($elements as $element) {
+			$currentContent = [];
+			if(isset($element['content']))
+		 		$currentContent[] = $element['content'];
+
+			if(isset($element['s_content'])){
+				$siblingContent = true;
+		 		$currentContent[count($currentContent)-1] .= $element['s_content'];
+			}
+
+			if(isset($element['child'])){
+				$temp = $this->contents($element['child']);
+				if(is_string($temp) || !empty($temp))
+					$currentContent[] = $temp;
+			}
+
+			if(!empty($currentContent))
+				$content[] = $currentContent;
+		}
+
+		if($siblingContent === true){
+			foreach ($content as &$value) {
+				if(count($value)===1)
+					$value = $value[0];
+			}
+		}
 		return $content;
 	}
 
