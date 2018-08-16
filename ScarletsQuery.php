@@ -475,11 +475,7 @@ class MarkupLanguageElement{
 		return '';
 	}
 	
-	public function &contents($elements = false){
-		$root = false;
-		if($elements===false)
-			$root = true;
-
+	public function &contents($elements = false, $isRecalled = false){
 		if(!is_array($elements))
 			$elements = [$this->element];
 
@@ -493,11 +489,15 @@ class MarkupLanguageElement{
 
 			if(isset($element['s_content'])){
 				$siblingContent = true;
-		 		$currentContent[count($currentContent)-1] .= $element['s_content'];
+				$count = count($currentContent);
+				if($count === 0)
+		 			$currentContent[] = $element['s_content'];
+				else
+		 			$currentContent[$count - 1] .= $element['s_content'];
 			}
 
 			if(isset($element['child'])){
-				$temp = $this->contents($element['child']);
+				$temp = $this->contents($element['child'], true);
 				if(is_string($temp) || !empty($temp))
 					$currentContent[] = $temp;
 			}
@@ -512,7 +512,7 @@ class MarkupLanguageElement{
 					$value = $value[0];
 			}
 		}
-		if($root === true && isset($content[0]))
+		if($isRecalled === false && isset($content[0]))
 			$content = $content[0];
 
 		return $content;
@@ -583,7 +583,7 @@ class MarkupLanguageElementCollection implements \ArrayAccess{
 		return $content;
 	}
 	
-	public function &contents($elements = false){
+	public function &contents($elements = false, $isRecalled = false){
 		if($elements===false)
 			$elements = $this->collection;
 		elseif(is_numeric($elements))
@@ -599,11 +599,15 @@ class MarkupLanguageElementCollection implements \ArrayAccess{
 
 			if(isset($element['s_content'])){
 				$siblingContent = true;
-		 		$currentContent[count($currentContent)-1] .= $element['s_content'];
+				$count = count($currentContent);
+				if($count === 0)
+		 			$currentContent[] = $element['s_content'];
+				else
+		 			$currentContent[$count - 1] .= $element['s_content'];
 			}
 
 			if(isset($element['child'])){
-				$temp = $this->contents($element['child']);
+				$temp = $this->contents($element['child'], true);
 				if(is_string($temp) || !empty($temp))
 					$currentContent[] = $temp;
 			}
@@ -614,10 +618,17 @@ class MarkupLanguageElementCollection implements \ArrayAccess{
 
 		if($siblingContent === true){
 			foreach ($content as &$value) {
-				if(count($value)===1)
+				if(count($value) === 1)
 					$value = $value[0];
 			}
 		}
+
+		if($isRecalled === false){
+			foreach ($content as &$value) {
+				$value = $value[0];
+			}
+		}
+
 		return $content;
 	}
 
