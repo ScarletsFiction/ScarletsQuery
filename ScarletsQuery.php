@@ -306,6 +306,7 @@ class MarkupLanguage{
 			$attributes = explode('>', $element);
 			if(count($attributes) === 1){
 				$element = trim($attributes[0]);
+				$tag = $element;
 				$attributes = false;
 			} else {
 				$element = trim($attributes[1]);
