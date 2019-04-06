@@ -13,259 +13,9 @@
 namespace Scarlets\Library;
 
 class MarkupLanguage{
-	private static $DocumentTree = [];
-	private static $currentTreeIndex = [];
-	private static $lockTreeIndex = false;
-
-	public static function selector($selector, $customTree){
-		// Create copy
-		self::$DocumentTree = $customTree;
-
-		$selector = explode(' ', $selector);
-		foreach($selector as $value){
-			if($value[0] === '>'){
-				self::$lockTreeIndex = count(self::$currentTreeIndex) + 1;
-				continue;
-			}
-
-			if($value[0]==='.')
-				self::findClass(substr($value, 1));
-
-			elseif($value[0]==='#')
-				self::findID(substr($value, 1));
-
-			elseif($value[0]==='['){
-				$value = substr($value, 1, -1);
-				$value = explode('=', $value);
-				if(count($value)===1)
-					$value[1] = null;
-				else 
-					$value[1] = str_replace(['"', "'"], '', $value[1]);
-				self::findAttribute($value[0], $value[1]);
-			}
-
-			else
-				self::findTag($value);
-
-			if(self::$lockTreeIndex)
-				self::$lockTreeIndex = false;
-		}
-		return self::$DocumentTree;
-	}
-
-	private static function currentElementQuery($selector){
-		self::$lockTreeIndex = false;
-
-		preg_match_all('/[.#[][\w=\"\']+/', $selector, $matches);
-		foreach($matches[0] as $value) {
-			if($value[0] === '.')
-				self::findClass(substr($value, 1), true);
-
-			elseif($value[0] === '#')
-				self::findID(substr($value, 1), true);
-
-			elseif($value[0] === '['){
-				$value = substr($value, 1);
-				$value = explode('=', $value);
-				if(count($value)===1)
-					$value[1] = null;
-				else 
-					$value[1] = str_replace(['"', "'"], '', $value[1]);
-				self::findAttribute($value[0], $value[1], true);
-			}
-		}
-	}
-
-	private static function findClass($select, $currentElement = false){
-		if($currentElement){
-			$collection = &self::$DocumentTree;
-			for ($i=0; $i < count($collection); $i++) {
-				foreach ($collection[$i] as $tag => $value) {
-					if(!isset($value['class']) || !in_array($select, $value['class']))
-						unset($collection[$i]);
-					break;
-				}
-			}
-			$collection = array_values($collection);
-			return;
-		}
-		
-		$selector = explode('%$@', str_replace(['.', '#', '['], '%$@', $select))[0];
-		self::$DocumentTree = self::iterateFindClass($selector, self::$DocumentTree);
-
-		if($selector !== $select)
-			$matched = self::currentElementQuery($select);
-	}
-
-	private static function &iterateFindClass($class, &$currentTree){
-		$found = [];
-		$count = 0;
-		$treeLocked = self::$lockTreeIndex ? (self::$lockTreeIndex < count(self::$currentTreeIndex)) : false;
-		self::$currentTreeIndex[] = &$count;
-		foreach($currentTree as $childs){
-			if(isset($childs['parent']))
-				self::$currentTreeIndex = $childs['parent'];
-
-			foreach ($childs as $tag => $value) {
-				if(isset($value['class']) && in_array($class, $value['class'])){
-					$childs['parent'] = json_decode(json_encode(self::$currentTreeIndex), true);
-					$found[] = $childs;
-				}
-
-				if(isset($childs['child']) && !$treeLocked){
-					$data = self::iterateFindClass($class, $childs['child']);
-					if(!empty($data)) $found = array_merge($found, $data);
-				}
-				break;
-			}
-			$count++;
-		}
-		array_pop(self::$currentTreeIndex);
-		return $found;
-	}
-
-	private static function findID($select, $currentElement = false){
-		if($currentElement){
-			$collection = &self::$DocumentTree;
-			for ($i=0; $i < count($collection); $i++) {
-				foreach ($collection[$i] as $tag => $value) {
-					if(!$select == $value['id'])
-						unset($collection[$i]);
-					break;
-				}
-			}
-			$collection = array_values($collection);
-			return;
-		}
-		
-		$selector = explode('%$@', str_replace(['.', '#', '['], '%$@', $select))[0];
-		self::$DocumentTree = self::iterateFindID($selector, self::$DocumentTree);
-
-		if($selector !== $select)
-			$matched = self::currentElementQuery($select);
-	}
-
-	private static function &iterateFindID($id, &$currentTree){
-		$found = [];
-		$count = 0;
-		$treeLocked = self::$lockTreeIndex ? (self::$lockTreeIndex < count(self::$currentTreeIndex)) : false;
-		self::$currentTreeIndex[] = &$count;
-		foreach($currentTree as $childs){
-			if(isset($childs['parent']))
-				self::$currentTreeIndex = $childs['parent'];
-
-			foreach ($childs as $tag => $value) {
-				if(isset($value['id']) && $id == $value['id']){
-					$childs['parent'] = json_decode(json_encode(self::$currentTreeIndex), true);
-					$found[] = $childs;
-				}
-
-				if(isset($childs['child']) && !$treeLocked){
-					$data = self::iterateFindID($id, $childs['child']);
-					if(!empty($data)) $found = array_merge($found, $data);
-				}
-				break;
-			}
-			$count++;
-		}
-		array_pop(self::$currentTreeIndex);
-		return $found;
-	}
-
-	private static function findAttribute(&$select, $value, $currentElement = false){
-		if($currentElement){
-			$collection = &self::$DocumentTree;
-			for ($i=0; $i < count($collection); $i++) {
-				foreach ($collection[$i] as $tag => $attr) {
-					if(!isset($attr[$select]))
-						unset($collection[$i]);
-					elseif($value !== null && $value !== $attr[$select])
-						unset($collection[$i]);
-					break;
-				}
-			}
-			$collection = array_values($collection);
-			return;
-		}
-
-		self::$DocumentTree = self::iterateFindAttr($select, $value, self::$DocumentTree);
-		
-		if(strpos($select, '.') !==false || strpos($select, '#') !==false || strpos($select, '[') !==false)
-			$matched = self::currentElementQuery($select);
-	}
-
-	private static function &iterateFindAttr($key, $values, &$currentTree){
-		$found = [];
-		$count = 0;
-		$treeLocked = self::$lockTreeIndex ? (self::$lockTreeIndex < count(self::$currentTreeIndex)) : false;
-		self::$currentTreeIndex[] = &$count;
-		foreach($currentTree as $childs){
-			if(isset($childs['parent']))
-				self::$currentTreeIndex = $childs['parent'];
-			
-			foreach ($childs as $tag => $value) {
-				if(isset($value[$key])){
-					if($values !== null){
-						if($value[$key] === $values){
-							$childs['parent'] = json_decode(json_encode(self::$currentTreeIndex), true);
-							$found[] = $childs;
-						}
-					}
-					else{
-						$childs['parent'] = json_decode(json_encode(self::$currentTreeIndex), true);
-						$found[] = $childs;
-					}
-				}
-				
-				if(isset($childs['child']) && !$treeLocked){
-					$data = self::iterateFindAttr($key, $values, $childs['child']);
-					if(!empty($data)) $found = array_merge($found, $data);
-				}
-				break;
-			}
-			$count++;
-		}
-		array_pop(self::$currentTreeIndex);
-		return $found;
-	}
-
-	private static function findTag(&$select){
-		$selector = explode('%$@', str_replace(['.', '#', '['], '%$@', $select))[0];
-		self::$DocumentTree = self::iterateFindTag($selector, self::$DocumentTree);
-
-		if($selector !== $select)
-			$matched = self::currentElementQuery($select);
-	}
-
-	private static function &iterateFindTag($findTag, &$currentTree){
-		$found = [];
-		$count = 0;
-		$treeLocked = self::$lockTreeIndex ? (self::$lockTreeIndex < count(self::$currentTreeIndex)) : false;
-		self::$currentTreeIndex[] = &$count;
-		foreach($currentTree as $childs){
-			if(isset($childs['parent']))
-				self::$currentTreeIndex = $childs['parent'];
-			
-			foreach ($childs as $tag => $value) {
-				if($tag === $findTag){
-					$childs['parent'] = json_decode(json_encode(self::$currentTreeIndex), true);
-					$found[] = $childs;
-				}
-
-				if(isset($childs['child']) && !$treeLocked){
-					$data = self::iterateFindTag($findTag, $childs['child']);
-					if(!empty($data)) $found = array_merge($found, $data);
-				}
-				break;
-			}
-			$count++;
-		}
-		array_pop(self::$currentTreeIndex);
-		return $found;
-	}
-
+	public static $debug = false;
 	public static function parseText($source){
-		self::$DocumentTree = [];
+		$DocumentTree = [];
 		// Remove all not important stuff
 		$source = preg_replace('/<(style|script).*?<\/(style|script)>|\n+|\t+|\r/s', '', $source);
 		$source = str_replace(['<br/ >', '<br />', '<br/>', '<br>', '</br>', '</ br>', '< /br>'], "\n", $source);
@@ -277,8 +27,8 @@ class MarkupLanguage{
 
 		$matches = explode('<', $source);
 		array_shift($matches);
-		self::parseTree(self::$DocumentTree, 0, $matches, count($matches));
-		return (new MarkupLanguageElementCollection(self::$DocumentTree, self::$DocumentTree));
+		self::parseTree($DocumentTree, 0, $matches, count($matches));
+		return (new MarkupLanguageElementCollection($DocumentTree, $DocumentTree));
 	}
 
 	private static function parseTree(&$lastTree, $lastIndex, &$elements, $elementCount){
@@ -434,7 +184,7 @@ class MarkupLanguageElement{
 	}
 
 	public function selector($selector){
-		return new MarkupLanguageElementCollection(MarkupLanguage::selector($selector, [$this->element]), $this->DocumentTree);
+		return new MarkupLanguageElementCollection(MarkupLanguageSelector::selector($selector, [$this->element]), $this->DocumentTree);
 	}
 
 	public function parent(){
@@ -541,18 +291,22 @@ class MarkupLanguageElement{
 		}
 		return null;
 	}
+
+    public function __toString(){
+    	return json_encode($this->element);
+    }
 }
 
 class MarkupLanguageElementCollection implements \ArrayAccess{
 	private $DocumentTree = [];
-	private $collection = [];
+	public $collection = [];
 	public function __construct($collection, &$DocumentTree){
 		$this->collection = $collection;
 		$this->DocumentTree = $DocumentTree;
 	}
 
 	public function selector($selector){
-		return new MarkupLanguageElementCollection(MarkupLanguage::selector($selector, $this->collection), $this->DocumentTree);
+		return new MarkupLanguageElementCollection(MarkupLanguageSelector::selector($selector, $this->collection), $this->DocumentTree);
 	}
 
 	public function parent(){
@@ -678,4 +432,291 @@ class MarkupLanguageElementCollection implements \ArrayAccess{
 
     	return null;
     }
+
+    public function __toString(){
+    	return json_encode($this->collection);
+    }
+}
+
+class MarkupLanguageSelector{
+	private static $DocumentTree = [];
+	private static $currentTreeIndex = [];
+	private static $lockTreeIndex = false;
+
+	public static function selector($selector, $customTree){
+		// Create copy
+		self::$DocumentTree = $customTree;
+
+		$selector = explode(' ', $selector);
+		foreach($selector as $value){
+			if($value[0] === '>'){
+				if(MarkupLanguage::$debug === true)
+					echo '>';
+
+				self::$lockTreeIndex = count(self::$currentTreeIndex) + 1;
+				continue;
+			}
+
+			if(MarkupLanguage::$debug === true)
+				print_r(' ['.count(self::$DocumentTree).'] ');
+
+			if($value[0] === '.')
+				self::findClass(substr($value, 1));
+
+			elseif($value[0] === '#')
+				self::findID(substr($value, 1));
+
+			elseif($value[0] === '['){
+				$value = substr($value, 1, -1);
+				$value = explode('=', $value);
+				if(count($value) === 1)
+					$value[1] = null;
+				else 
+					$value[1] = str_replace(['"', "'"], '', $value[1]);
+				self::findAttribute($value[0], $value[1]);
+			}
+
+			else self::findTag($value);
+
+			if(self::$lockTreeIndex)
+				self::$lockTreeIndex = false;
+
+			if(MarkupLanguage::$debug === true)
+				print_r($value.' ('.count(self::$DocumentTree).') ');
+		}
+
+		if(MarkupLanguage::$debug === true)
+			echo "\n";
+		return self::$DocumentTree;
+	}
+
+	private static function currentElementQuery($selector){
+		self::$lockTreeIndex = false;
+
+		preg_match_all('/[.#[:][\w=\"\'\-()_]+/', $selector, $matches);
+		foreach($matches[0] as $value) {
+			if($value[0] === '.')
+				self::findClass(substr($value, 1), true);
+
+			elseif($value[0] === '#')
+				self::findID(substr($value, 1), true);
+
+			elseif($value[0] === '['){
+				$value = substr($value, 1);
+				$value = explode('=', $value);
+				if(count($value)===1)
+					$value[1] = null;
+				else 
+					$value[1] = str_replace(['"', "'"], '', $value[1]);
+				self::findAttribute($value[0], $value[1], true);
+			}
+
+			elseif($value[0] === ':')
+				self::extraStuff(substr($value, 1));
+		}
+	}
+
+	private static function extraStuff($select){
+		$select = explode('(', $select);
+
+		if($select[0] === 'nth-child')
+			self::$DocumentTree = &self::$DocumentTree[str_replace(')', '', $select[1]-1)];
+		elseif($select[0] === 'last-child')
+			self::$DocumentTree = &self::$DocumentTree[count(self::$DocumentTree)-1];
+		elseif($select[0] === 'first-child')
+			self::$DocumentTree = &self::$DocumentTree[0];
+	}
+
+	private static function findClass($select, $currentElement = false){
+		if($currentElement){
+			$collection = &self::$DocumentTree;
+			$found = [];
+			for ($i=0; $i < count($collection); $i++) {
+				foreach ($collection[$i] as $tag => $value) {
+					if(isset($value['class']) && in_array($select, $value['class']))
+						$found[] = $collection[$i];
+					break;
+				}
+			}
+			self::$DocumentTree = &$found;
+			return;
+		}
+
+		$selector = explode('%$@', str_replace(['.', '#', '[', ':'], '%$@', $select))[0];
+		self::$DocumentTree = self::iterateFindClass($selector, self::$DocumentTree);
+
+		if($selector !== $select)
+			$matched = self::currentElementQuery($select);
+	}
+
+	private static function &iterateFindClass($class, &$currentTree){
+		$found = [];
+		$count = 0;
+		$treeLocked = self::$lockTreeIndex ? (self::$lockTreeIndex < count(self::$currentTreeIndex)) : false;
+		self::$currentTreeIndex[] = &$count;
+		foreach($currentTree as $childs){
+			if(isset($childs['parent']))
+				self::$currentTreeIndex = $childs['parent'];
+
+			foreach ($childs as $tag => $value) {
+				if(isset($value['class']) && in_array($class, $value['class'])){
+					$childs['parent'] = json_decode(json_encode(self::$currentTreeIndex), true);
+					$found[] = $childs;
+				}
+
+				if(isset($childs['child']) && !$treeLocked){
+					$data = self::iterateFindClass($class, $childs['child']);
+					if(!empty($data)) $found = array_merge($found, $data);
+				}
+				break;
+			}
+			$count++;
+		}
+		array_pop(self::$currentTreeIndex);
+		return $found;
+	}
+
+	private static function findID($select, $currentElement = false){
+		if($currentElement){
+			$collection = &self::$DocumentTree;
+			$found = [];
+			for ($i=0; $i < count($collection); $i++) {
+				foreach ($collection[$i] as $tag => $value) {
+					if(!$select == $value['id'])
+						break;
+					$found[] = $collection[$i];
+					break;
+				}
+			}
+			self::$DocumentTree = &$found;
+			return;
+		}
+		
+		$selector = explode('%$@', str_replace(['.', '#', '[', ':'], '%$@', $select))[0];
+		self::$DocumentTree = self::iterateFindID($selector, self::$DocumentTree);
+
+		if($selector !== $select)
+			$matched = self::currentElementQuery($select);
+	}
+
+	private static function &iterateFindID($id, &$currentTree){
+		$found = [];
+		$count = 0;
+		$treeLocked = self::$lockTreeIndex ? (self::$lockTreeIndex < count(self::$currentTreeIndex)) : false;
+		self::$currentTreeIndex[] = &$count;
+		foreach($currentTree as $childs){
+			if(isset($childs['parent']))
+				self::$currentTreeIndex = $childs['parent'];
+
+			foreach ($childs as $tag => $value) {
+				if(isset($value['id']) && $id == $value['id']){
+					$childs['parent'] = json_decode(json_encode(self::$currentTreeIndex), true);
+					$found[] = $childs;
+				}
+
+				if(isset($childs['child']) && !$treeLocked){
+					$data = self::iterateFindID($id, $childs['child']);
+					if(!empty($data)) $found = array_merge($found, $data);
+				}
+				break;
+			}
+			$count++;
+		}
+		array_pop(self::$currentTreeIndex);
+		return $found;
+	}
+
+	private static function findAttribute(&$select, $value, $currentElement = false){
+		if($currentElement){
+			$collection = &self::$DocumentTree;
+			$found = [];
+			for ($i=0; $i < count($collection); $i++) {
+				foreach ($collection[$i] as $tag => $attr) {
+					if(!isset($attr[$select]) || $value !== null && $value !== $attr[$select])
+						break;
+
+					$found[] = $collection[$i];
+					break;
+				}
+			}
+			self::$DocumentTree = &$found;
+			return;
+		}
+
+		self::$DocumentTree = self::iterateFindAttr($select, $value, self::$DocumentTree);
+		
+		if(strpos($select, '.') !==false || strpos($select, '#') !==false || strpos($select, '[') !==false || strpos($select, ':') !==false)
+			$matched = self::currentElementQuery($select);
+	}
+
+	private static function &iterateFindAttr($key, $values, &$currentTree){
+		$found = [];
+		$count = 0;
+		$treeLocked = self::$lockTreeIndex ? (self::$lockTreeIndex < count(self::$currentTreeIndex)) : false;
+		self::$currentTreeIndex[] = &$count;
+		foreach($currentTree as $childs){
+			if(isset($childs['parent']))
+				self::$currentTreeIndex = $childs['parent'];
+			
+			foreach ($childs as $tag => $value) {
+				if(isset($value[$key])){
+					if($values !== null){
+						if($value[$key] === $values){
+							$childs['parent'] = json_decode(json_encode(self::$currentTreeIndex), true);
+							$found[] = $childs;
+						}
+					}
+					else{
+						$childs['parent'] = json_decode(json_encode(self::$currentTreeIndex), true);
+						$found[] = $childs;
+					}
+				}
+				
+				if(isset($childs['child']) && !$treeLocked){
+					$data = self::iterateFindAttr($key, $values, $childs['child']);
+					if(!empty($data)) $found = array_merge($found, $data);
+				}
+				break;
+			}
+			$count++;
+		}
+		array_pop(self::$currentTreeIndex);
+		return $found;
+	}
+
+	private static function findTag(&$select){
+		$selector = explode('%$@', str_replace(['.', '#', '[', ':'], '%$@', $select), 2)[0];
+		self::$DocumentTree = self::iterateFindTag($selector, self::$DocumentTree);
+
+		if($selector !== $select)
+			$matched = self::currentElementQuery($select);
+	}
+
+	private static function &iterateFindTag($findTag, &$currentTree){
+		$found = [];
+		$count = 0;
+		$treeLocked = self::$lockTreeIndex ? (self::$lockTreeIndex < count(self::$currentTreeIndex)) : false;
+		self::$currentTreeIndex[] = &$count;
+		foreach($currentTree as $childs){
+			if(isset($childs['parent']))
+				self::$currentTreeIndex = $childs['parent'];
+			
+			foreach ($childs as $tag => $value) {
+				if($tag === $findTag){
+					$childs['parent'] = json_decode(json_encode(self::$currentTreeIndex), true);
+					$found[] = $childs;
+				}
+
+				if(isset($childs['child']) && !$treeLocked){
+					$data = self::iterateFindTag($findTag, $childs['child']);
+					if(!empty($data)) $found = array_merge($found, $data);
+				}
+				break;
+			}
+			$count++;
+		}
+		array_pop(self::$currentTreeIndex);
+		return $found;
+	}
+
 }
