@@ -65,7 +65,8 @@ class MarkupLanguage{
 				if(count($attributes) === 1)
 					$attributes = [];
 				else{
-					$attributes[1] = str_replace(["\'", '\"'], '\\%1#', $attributes[1]);
+					$attributes[1] = str_replace(["\'", '\"'], ['\\%1#', '\\%2#'], $attributes[1]);
+					$attributes[1] = str_replace("'", '"', $attributes[1]);
 					$attributes_ = explode('="', $attributes[1]);
 					$attributes = [];
 
@@ -93,7 +94,7 @@ class MarkupLanguage{
 							continue;
 						}
 
-						$attributes[$attr] = str_replace('\\%1#', '\"', $data);
+						$attributes[$attr] = str_replace(['\\%1#', '\\%2#'], "'", $data);
 
 						// Prepare next
 						$attr = trim($attributes_[$a][count($attributes_[$a]) - 1]);
